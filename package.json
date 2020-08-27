@@ -1,0 +1,14 @@
+{
+  "name": "ippmapserver",
+  "version": "1.0.0",
+  "scripts": {
+    "uve": "latest",
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "express": "latest",
+    "body-parser": "latest",
+    "connect-mongo": "^3.2.0",
+    "mongodb": "latest"
+  }
+}
