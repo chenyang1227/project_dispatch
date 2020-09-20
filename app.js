@@ -35,4 +35,4 @@ app.use((req, res) => {
 });
 
 // 监听
-app.listen(config.readConfigSync().port);
+app.listen(config.readConfigSync().dispatch.port);
