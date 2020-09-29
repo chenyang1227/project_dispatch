@@ -1,8 +1,7 @@
 {
-  "name": "ippmapserver",
+  "name": "ippdispatchserver",
   "version": "1.0.0",
   "scripts": {
-    "uve": "latest",
     "start": "node app.js"
   },
   "dependencies": {
