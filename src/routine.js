@@ -66,7 +66,8 @@ module.exports = {
         let open = [{
             vertex: from,
             weight: 0,
-            routine: [from]
+            routine: [fromPin.coordinate.slice(0, 2)],
+            height: [fromPin.coordinate[2] || 0]
         }];
         let close = [];
         while(1) {
@@ -74,7 +75,10 @@ module.exports = {
             let cur = open[0];
             if(cur.vertex.toString() === to.toString()) {
                 await client.close();
-                return cur.routine;
+                return {
+                    routine: cur.routine,
+                    height: cur.height
+                };
             }
             open.shift();
             close.push(cur);
@@ -90,7 +94,8 @@ module.exports = {
                 let neighbour = edges[i].terminal[0].oid.toString() === cur.vertex.toString() ? edges[i].terminal[1].oid : edges[i].terminal[0].oid;
                 if(close.find((e) => {return e.vertex.toString() === neighbour.toString()})) continue;
                 let newWeight = cur.weight + edge.cost;
-                let newRoutine = cur.routine.concat([neighbour])
+                let newRoutine = cur.routine.concat(edge.routine);
+                let newHeight = cur.height.concat(edge.height)
                 // 1.1. 检查是否在Queue
                 let index = open.indexOf(open.find((e) => {return e.vertex.toString() === neighbour.toString()}));
                 if(index !== -1) {
@@ -98,13 +103,15 @@ module.exports = {
                     if(newWeight < open[index].weight) {
                         open[index].weight = newWeight;
                         open[index].routine = newRoutine;
+                        open[index].height = newHeight;
                     }
                 } else {
                     // 1.3. 若不在，计算weight并添加
                     priorityInsert(open, {
                         vertex: neighbour,
                         weight: newWeight,
-                        routine: newRoutine
+                        routine: newRoutine,
+                        height: newHeight
                     })
                 }
             }
@@ -113,5 +120,5 @@ module.exports = {
 }
 
 module.exports.get({
-    from: "5f72ffdbcfb707d00c651103", to: "5f38a921b2e1fb5c98a89b98"
+    from: "5f72ffdbcfb707d00c651103", to: "5f473c56b027140c197d7d07"
 }).then(console.log).catch(console.error);
