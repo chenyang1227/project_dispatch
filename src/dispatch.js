@@ -2,13 +2,15 @@ const mongoClient = require("mongodb").MongoClient;
 const config = require("../utils/config").readConfigSync();
 const mongoPath = "mongodb://" + config["db"]["user"] + ":" + config["db"]["pwd"] + "@" + config["db"]["ip"] + ":" + config["db"]["port"] + "/" + config["db"]["db"]["business"];
 const {ObjectID} = require("mongodb");
+const {DBRef} = require("mongodb");
 
 
 async function select(date_available, cost) {
     let db = await mongoClient.connect(mongoPath, {useUnifiedTopology: true});
-    let time_ = cost/db.db(config["db"]["db"]["dispatch"]["speed"]);
-    let time = time_ + date_available
-    let parameter = cost * db.db(config["db"]["db"]["dispatch"]["batteryWeight"]) + time * db.db(config["db"]["db"]["dispatch"]["timeWeight"]);
+    let time_ = cost/3; //db.db(config["dispatch"]["speed"]);  出现了几次的问题，这里读数读不出来
+    let time = time_ + date_available;
+    let parameter = cost * 1 + time * 1;//(db.db.config["dispatch"]["timeWeight"]),db.db(config["dispatch"]["batteryWeight"])
+    //console.log([parameter, time]);
     return [parameter, time]
 }
 
@@ -54,13 +56,12 @@ module.exports = {
             description: "No corresponding order."
         }
 
-
-        //读取order的中from/to的两个pinpoint,在garage中找----> pinpoint在找path中用
-        let garageCol = db.db(config["db"]["db"]["hardware"]).collection("garage");
+        //console.log(ObjectID(record[0].from));
+        let pinpointCol = db.db(config["db"]["db"]["map"]).collection("pinpoint");
         //1. from
-        let garageFrom = await garageCol.find({_id: ObjectID(record[0].from)}).toArray();
+        let garageFrom = await pinpointCol.find({_id: ObjectID(record[0].from)}).toArray();
         //2. to
-        let garageTo = await garageCol.find({_id: ObjectID(record[0].to)}).toArray();
+        let garageTo = await pinpointCol.find({_id: ObjectID(record[0].to)}).toArray();
 
 
         //读取flight
@@ -77,49 +78,57 @@ module.exports = {
 
         //读取路径path/routine信息
         let pathCol = db.db(config["db"]["db"]["map"]).collection("path");
-        let routineCol = db.db(config["db"]["db"]["map"]).collection("path");
+        let routineCol = db.db(config["db"]["db"]["map"]).collection("routine");
+
 
         //选取飞机
-        let para = db.db(config["dispatch"]["parameter"]);
+        let para = 0; //db.db(config["dispatch"]["parameter"]);
         let choose, finalTime, finalPlace, startPlace, dispatch_routine1;
         for (let i = 0; i < drones.length ; i++){
-            //let final_task = await taskCol.find({_id: ObjectID(drones[i].tasks[drones[i].tasks.length-1])}).toArray();
-            let dispatch_path = await pathCol.find({$and: [{terminal: ObjectID(garageFrom[0].center)}, {terminal: ObjectID(droneCol[i].lastPlace)}]}).toArray();
-            let dispatch_routine = await routineCol.find({_id: ObjectID(dispatch_path[0].routine)}).toArray();
-            let temp = select(droneCol[i].finish,dispatch_routine[0].cost);
-            if (para < temp[0]){
-                choose = i; para = temp[0]; finalTime = temp[1]; finalPlace = ObjectID(record[0].to); startPlace = ObjectID(final_task[0].lastPlace);
-                dispatch_routine1 = dispatch_routine;
+            let dispatch_path = await pathCol.find({$and: [{terminal: (DBRef("pinpoint", ObjectID(garageFrom[0]._id)))}, {terminal: DBRef("pinpoint", ObjectID(drones[i].lastPlace))}]}).toArray();
+            //console.log(garageFrom[0]._id);
+            //console.log(drones[0].lastPlace);
+            //console.log(dispatch_path[0]._id);
+            let dispatch_routine = await routineCol.find({_id: ObjectID("5f72a5a300277121e0145849")}).toArray();//dispatch_path[0]._id，这里找不到对应的路径，如果用dispatch_path[0]._id带进去所得到的id不在routine的column里面
+            //console.log(dispatch_routine[0].cost);
+            let temp = await select(drones[i].finish,dispatch_routine[0].cost);
+            //console.log(temp);
+            if (para <= temp[0]){
+                choose = i; para = temp[0]; finalTime = temp[1]; finalPlace = ObjectID(record[0].to); startPlace = ObjectID(drones[0].lastPlace);
+                dispatch_routine1 = dispatch_routine[0];  //这里可能有问题
             }
+            //console.log(temp[0]);
+            //console.log(dispatch_routine1);
         }
 
         //读取garage中pinpoint的坐标----> 坐标在生成路径时使用
-        let pinpointCol = db.db(config["db"]["db"]["map"]).collection("pinpoint");
+
         //1. 起始点
         let pinpointStart = await pinpointCol.find({_id: startPlace}).toArray();
-        //2. from
-        let pinpointFrom = await pinpointCol.find({_id: ObjectID(garageFrom[0].center)}).toArray();
-        //3. to
-        let pinpointTo = await pinpointCol.find({_id: ObjectID(garageTo[0].center)}).toArray();
+        //2. from   为garageFrom (为pinpoint类型的)
+        //3. to     为garageTo
+
 
 
         //找到指定routine数组(1.去取货地的；2.送货的)
         //1.
         let temp1 = [];
-        for (let i=0; i< dispatch_routine1.length; i++){
+        for (let i=0; i<dispatch_routine1.length; i++){
             temp1.push([dispatch_routine1[0].routine[i][0], dispatch_routine1[0].routine[i][1], dispatch_routine1[0].height[i]+db.db(config["db"]["db"]["dispatch"]["height"])]);
         }
         let temp1_ = pinpointStart[0].coordinate.concat(temp1);
-        let waypoint1 = toEPSG4326(temp1_.concat(pinpointFrom[0].coordinate));
+        let waypoint1 = toEPSG4326(temp1_.concat(garageFrom[0].coordinate));
         //2.
-        let dispatch_path2 = await pathCol.find({$and: [{terminal: ObjectID(record[0].from)}, {terminal: ObjectID(final_task[0].lastPlace)}]}).toArray();
-        let dispatch_routine2 = await routineCol.find({_id: ObjectID(dispatch_path2[0].routine)}).toArray();
+        let dispatch_path2 = await pathCol.find({$and: [{terminal: (DBRef("pinpoint", ObjectID(record[0].from)))}, {terminal: DBRef("pinpoint", ObjectID(drones[0].lastPlace))}]}).toArray();
+        console.log(dispatch_path2);
+        //let dispatch_path2 = await pathCol.find({$and: [{terminal: ObjectID(record[0].from)}, {terminal: ObjectID(drones[0].lastPlace)}]}).toArray();
+        let dispatch_routine2 = await routineCol.find({_id: ObjectID(dispatch_path2[0]._id)}).toArray();
         let temp2 = [];
         for (let i=0; i< dispatch_routine2.length; i++){
             temp2.push([dispatch_routine2[0].routine[i][0], dispatch_routine2[0].routine[i][1], dispatch_routine2[0].height[i]+db.db(config["db"]["db"]["dispatch"]["height"])]);
         }
-        let temp2_ = pinpointFrom[0].coordinate.concat(temp2);
-        let waypoint2 = toEPSG4326(temp2_.concat(pinpointTo[0].coordinate));
+        let temp2_ = garageFrom[0].coordinate.concat(temp2);
+        let waypoint2 = toEPSG4326(temp2_.concat(garageTo[0].coordinate));
 
         //生成订单task
         let result = await taskCol.insertMany(
