@@ -77,7 +77,8 @@ module.exports = {
                 await client.close();
                 return {
                     routine: cur.routine,
-                    height: cur.height
+                    height: cur.height,
+                    cost: cur.weight
                 };
             }
             open.shift();
@@ -118,7 +119,3 @@ module.exports = {
         }
     }
 }
-
-module.exports.get({
-    from: "5f72ffdbcfb707d00c651103", to: "5f473c56b027140c197d7d07"
-}).then(console.log).catch(console.error);
